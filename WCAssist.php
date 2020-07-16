@@ -225,7 +225,7 @@ class WCAssist extends WC_Payment_Gateway
     {
         $out_summ = $posted['orderamount'];
         $inv_id = $posted['ordernumber'];
-        
+
         if ($posted['checkvalue'] == strtoupper(md5(strtoupper(md5($this->assist_key1) . md5($this->assist_merchant . $inv_id . $out_summ . $posted['ordercurrency'] . $posted['orderstate']))))) {
             echo 'OK' . $inv_id;
             return true;
@@ -286,20 +286,19 @@ class WCAssist extends WC_Payment_Gateway
      **/
     function successful_request($posted)
     {
-        global $woocommerce;
-
         $out_summ = $posted['orderamount'];
         $inv_id = $posted['ordernumber'];
 
         $order = new WC_Order($inv_id);
         // Check order not already completed
-        if ($order->status == 'completed') {
+        if ($order->get_status() === 'completed') {
             exit;
         }
 
         // Payment completed
         $order->add_order_note(__('Платеж успешно завершен.', 'woocommerce'));
         $order->payment_complete();
+
         exit;
     }
 
@@ -311,7 +310,6 @@ class WCAssist extends WC_Payment_Gateway
         $inv_id = $posted['ordernumber'];
 
         $order = new WC_Order($inv_id);
-
 
         // Payment completed
         $order->add_order_note(__('Платеж успешно завершен неудачно.', 'woocommerce'));
