@@ -241,6 +241,7 @@ class WCAssist extends WC_Payment_Gateway
         global $woocommerce;
 
         if (isset($_GET['assist']) and $_GET['assist'] == 'result') {
+            file_put_contents(__DIR__ . '/debug.log', print_r($_REQUEST, true));
             @ob_clean();
 
             $_POST = stripslashes_deep($_POST);
