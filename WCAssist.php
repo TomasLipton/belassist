@@ -225,6 +225,7 @@ class WCAssist extends WC_Payment_Gateway
     {
         $out_summ = $posted['orderamount'];
         $inv_id = $posted['ordernumber'];
+        
         if ($posted['checkvalue'] == strtoupper(md5(strtoupper(md5($this->assist_key1) . md5($this->assist_merchant . $inv_id . $out_summ . $posted['ordercurrency'] . $posted['orderstate']))))) {
             echo 'OK' . $inv_id;
             return true;
@@ -244,7 +245,7 @@ class WCAssist extends WC_Payment_Gateway
             file_put_contents(__DIR__ . '/debug.log', print_r($_REQUEST, true));
             @ob_clean();
 
-            $_POST = stripslashes_deep($_POST);
+            $_POST = stripslashes_deep($_REQUEST);
 
             if ($this->check_ipn_request_is_valid($_POST)) {
 
@@ -291,7 +292,6 @@ class WCAssist extends WC_Payment_Gateway
         $inv_id = $posted['ordernumber'];
 
         $order = new WC_Order($inv_id);
-
         // Check order not already completed
         if ($order->status == 'completed') {
             exit;
