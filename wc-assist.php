@@ -3,7 +3,7 @@
   Plugin Name: Assist Payment Gateway
   Plugin URI:
   Description: Allows you to use Assist payment gateway with the WooCommerce plugin.
-  Version: 0.1
+  Version: 0.2
  */
 
 //TODO: Выбор платежной системы на стороне магазина

@@ -18,7 +18,7 @@ class WCAssist extends WC_Payment_Gateway
         // Define user set variables
         $this->title = $this->get_option('title');
         $this->assist_merchant = $this->get_option('assist_merchant');
-        $this->assist_key1 = $this->get_option('assist_key1');
+        $this->assist_key = $this->get_option('assist_key');
         $this->liveurl = $this->get_option('assist_url');
         $this->description = $this->get_option('description');
         $this->instructions = $this->get_option('instructions');
@@ -54,10 +54,10 @@ class WCAssist extends WC_Payment_Gateway
             <?php $this->generate_settings_html(); ?>
         </table>
 
-        <?php else : ?>
+    <?php else : ?>
         <div class="inline error"><p><strong><?php _e('Шлюз отключен', 'woocommerce'); ?></strong>: <?php _e('assist не поддерживает валюты Вашего магазина.', 'woocommerce'); ?></p></div>
-            <?php
-        endif;
+    <?php
+    endif;
     }
 
     /**
@@ -87,7 +87,7 @@ class WCAssist extends WC_Payment_Gateway
                 'description' => __('Введите Merchant_ID', 'woocommerce'),
                 'default' => ''
             ),
-            'assist_key1' => array(
+            'assist_key' => array(
                 'title' => __('Секретное слово', 'woocommerce'),
                 'type' => 'text',
                 'description' => __('Введите секретное слово', 'woocommerce'),
@@ -137,7 +137,7 @@ class WCAssist extends WC_Payment_Gateway
 
         $out_summ = number_format($order->get_total(), 2, '.', '');
 
-        $hashcode = strtoupper(md5(strtoupper(md5($this->assist_key1) . md5($this->assist_merchant . $order_id . $out_summ . str_replace("RUR", "RUB", get_option('woocommerce_currency'))))));
+        $hashcode = strtoupper(md5(strtoupper(md5($this->assist_key) . md5($this->assist_merchant . $order_id . $out_summ . str_replace("RUR", "RUB", get_option('woocommerce_currency'))))));
 
         $args = [
             'Merchant_ID' => $this->assist_merchant,
@@ -150,6 +150,8 @@ class WCAssist extends WC_Payment_Gateway
             'Language' => 'RU',
             'URL_RETURN_OK' => get_home_url() . '/?wc-api=wc_assist&assist=success',
             'URL_RETURN_NO' => get_home_url() . '/?wc-api=wc_assist&assist=fail',
+//            'CardPayment' => 1,
+//            'ERIPPayment' => 1,
             'Email' => $order->get_billing_email(),
             'MobilePhone' => $order->get_billing_phone(),
             'OrderComment' => $order->get_customer_note(),
@@ -195,7 +197,7 @@ class WCAssist extends WC_Payment_Gateway
         $out_summ = $posted['orderamount'];
         $inv_id = $posted['ordernumber'];
 
-        $checksum = strtoupper(md5(strtoupper(md5($this->assist_key1) . md5($this->assist_merchant . $inv_id . $out_summ . $posted['ordercurrency'] . $posted['orderstate']))));
+        $checksum = strtoupper(md5(strtoupper(md5($this->assist_key) . md5($this->assist_merchant . $inv_id . $out_summ . $posted['ordercurrency'] . $posted['orderstate']))));
 
         return $posted['checkvalue'] === $checksum;
     }
@@ -205,6 +207,8 @@ class WCAssist extends WC_Payment_Gateway
      **/
     public function check_ipn_response()
     {
+        $this->logIPNRequest();
+
         if (isset($_GET['assist']) and $_GET['assist'] === 'result') {
             $data = stripslashes_deep($_REQUEST);
 
@@ -222,28 +226,30 @@ class WCAssist extends WC_Payment_Gateway
         } elseif (isset($_GET['assist']) && $_GET['assist'] === 'success') {
             $inv_id = $_REQUEST['ordernumber'];
             $order = wc_get_order($inv_id);
-            $order->update_status('processing', __('Платеж успешно оплачен', 'woocommerce'));
             WC()->cart->empty_cart();
             wp_redirect($this->get_return_url($order));
         } elseif (isset($_GET['assist']) and $_GET['assist'] === 'fail') {
-            $inv_id = $_POST['ordernumber'];
+            $inv_id = $_REQUEST['ordernumber'];
             $order = wc_get_order($inv_id);
 
             $order->update_status('failed', __('Платеж не оплачен', 'woocommerce'));
+            $order->add_order_note($_REQUEST['message']);
 
-            wp_redirect($order->get_cancel_order_url());
+            wp_redirect($this->get_return_url($order));
             exit;
         }
     }
 
     /**
      * Successful Payment!
+     * valid-assist-standard-ipn-request action
      **/
     public function successful_request($posted)
     {
         $orderId = $posted['ordernumber'];
 
         $order = wc_get_order($orderId);
+
         // Check order not already completed
         if ($order->get_status() === 'completed') {
             exit;
@@ -251,8 +257,7 @@ class WCAssist extends WC_Payment_Gateway
 
         // Payment completed
         $order->add_order_note(__('Платеж успешно завершен.', 'woocommerce'));
-        $order->payment_complete();
-
+        $order->payment_complete($posted['billnumber']);
         exit;
     }
 
@@ -262,9 +267,28 @@ class WCAssist extends WC_Payment_Gateway
 
         $order = wc_get_order($orderId);
 
+        if ($order->get_status() === 'failed') {
+            exit;
+        }
+
         // Payment completed
         $order->add_order_note(__('Платеж успешно завершен неудачно.', 'woocommerce'));
         $order->update_status('failed', __('Платеж не оплачен', 'woocommerce'));
         exit;
+    }
+
+    private function logIPNRequest()
+    {
+        $report = '';
+        $report .= '-------------------------' . "\n";
+        $report .= '[' . date("F j, Y, g:i a") . ']: ' . "\n";
+        $report .= "http://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]\n";
+        $report .= 'GET: ';
+        $report .= print_r($_GET, true);
+        $report .= 'POST: ';
+        $report .= print_r($_POST, true);
+        $report .= '-------------------------' . "\n";
+
+        file_put_contents(__DIR__ . '/debug.txt', $report, FILE_APPEND);
     }
 }
